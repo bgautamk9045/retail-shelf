@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shelf Monitor</title>
+  <style>
+    body { font-family: system-ui; margin: 0; background: #f5f5f5; }
+    header { background: #1e293b; color: white; padding: 1rem 2rem; }
+    #grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; padding: 1.5rem; }
+    .slot { background: white; border-radius: 10px; padding: 1.25rem; text-align: center; border: 2px solid #e2e8f0; }
+    .slot.ok    { border-color: #22c55e; }
+    .slot.empty { border-color: #ef4444; background: #fef2f2; }
+    .slot.wrong { border-color: #f59e0b; background: #fffbeb; }
+    .slot-id { font-size: 1.5rem; font-weight: 700; }
+    .status { font-size: 0.875rem; margin-top: 6px; color: #64748b; }
+    #log { padding: 0 1.5rem; }
+    .event { background: white; border-radius: 8px; padding: 12px 16px; margin: 6px 0; border-left: 4px solid #ef4444; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header><h2 style="margin:0">Smart Shelf Monitor</h2></header>
+
+  <div id="grid"></div>
+  <h3 style="padding: 0 1.5rem">Recent alerts</h3>
+  <div id="log"></div>
+
+  <script>
+    const SLOTS = ["A1","A2","A3","B1","B2","B3"];
+    const grid = document.getElementById("grid");
+    const log  = document.getElementById("log");
+
+    // Render shelf grid
+    SLOTS.forEach(id => {
+      const div = document.createElement("div");
+      div.className = "slot ok";
+      div.id = `slot-${id}`;
+      div.innerHTML = `<div class="slot-id">${id}</div><div class="status">OK</div>`;
+      grid.appendChild(div);
+    });
+
+    // WebSocket connection to backend
+    const ws = new WebSocket("ws://localhost:8000/ws/alerts");
+    ws.onmessage = e => {
+      const msg = JSON.parse(e.data);
+      if (msg.type !== "alert") return;
+
+      // Reset all slots to OK first
+      SLOTS.forEach(id => {
+        const el = document.getElementById(`slot-${id}`);
+        el.className = "slot ok";
+        el.querySelector(".status").textContent = "OK";
+      });
+
+      msg.out_of_stock.forEach(id => {
+        const el = document.getElementById(`slot-${id}`);
+        if (el) { el.className = "slot empty"; el.querySelector(".status").textContent = "OUT OF STOCK"; }
+      });
+
+      msg.misplaced.forEach(id => {
+        const el = document.getElementById(`slot-${id}`);
+        if (el) { el.className = "slot wrong"; el.querySelector(".status").textContent = "WRONG PRODUCT"; }
+      });
+
+      // Log event
+      const ts = new Date(msg.timestamp * 1000).toLocaleTimeString();
+      const entry = document.createElement("div");
+      entry.className = "event";
+      entry.textContent = `[${ts}] Out of stock: ${msg.out_of_stock.join(", ") || "none"} | Misplaced: ${msg.misplaced.join(", ") || "none"}`;
+      log.prepend(entry);
+    };
+  </script>
+</body>
+</html>
